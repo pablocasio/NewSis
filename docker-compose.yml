@@ -7,15 +7,29 @@
 # (sin depender de internet), avísame y agrego de nuevo el servicio "db".
 
 services:
+  # Contenedor de un solo uso: aplica las migraciones y el seed antes de que
+  # arranquen la app y el worker. Usa la imagen "worker" (con node_modules
+  # completo) porque la imagen "runner" es liviana y no trae el CLI de
+  # Prisma — si se intentara correr prisma ahí, npx bajaría la última
+  # versión de internet en cada arranque (incompatible con este schema).
+  migrate:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed || true"
+
   app:
     build:
       context: .
       target: runner
     restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     env_file: .env
     ports:
       - "3010:3000"
-    command: sh -c "npx prisma migrate deploy && npx prisma db seed || true && node server.js"
 
   # Tareas programadas: reporte diario por correo (22:00) y ping cada 4 min
   # para evitar que Neon suspenda el cómputo durante el horario de atención.
@@ -25,5 +39,7 @@ services:
       target: worker
     restart: unless-stopped
     depends_on:
-      - app
+      migrate:
+        condition: service_completed_successfully
     env_file: .env
+    command: ["npx", "tsx", "scripts/worker.ts"]
