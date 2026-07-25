@@ -1,4 +1,6 @@
 FROM node:20-alpine AS base
+# Prisma necesita OpenSSL para sus binarios de motor; Alpine no lo trae por defecto.
+RUN apk add --no-cache openssl
 
 FROM base AS deps
 WORKDIR /app
