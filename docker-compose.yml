@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Esta variante usa tu base de datos Neon (en la nube) en vez de un Postgres
 # local, así que NO hay un servicio "db" aquí: la app y el worker se
 # conectan directo con el DATABASE_URL que pongas en tu archivo .env
@@ -16,7 +14,7 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "3000:3000"
+      - "3010:3000"
     command: sh -c "npx prisma migrate deploy && npx prisma db seed || true && node server.js"
 
   # Tareas programadas: reporte diario por correo (22:00) y ping cada 4 min
