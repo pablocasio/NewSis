@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pos_abarrotes
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pos_abarrotes
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed || true && node server.js"
+
+  # Tareas programadas: reporte diario por correo (22:00) y ping cada 4 min
+  # para evitar que Neon (u otro Postgres serverless) suspenda el cómputo
+  # durante el horario de atención.
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    depends_on:
+      - db
+      - app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pos_abarrotes
+
+volumes:
+  db_data:

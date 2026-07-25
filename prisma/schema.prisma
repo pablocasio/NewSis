@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TRABAJADOR
+}
+
+enum MetodoPago {
+  EFECTIVO
+  YAPE
+  TARJETA
+  MIXTO
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  nombre       String
+  email        String   @unique
+  passwordHash String
+  rol          Role     @default(TRABAJADOR)
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  ventas      Sale[]
+  turnos      Shift[]
+  asistencias Attendance[]
+  movimientos StockMove[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  nombre   String    @unique
+  products Product[]
+}
+
+model Supplier {
+  id       String    @id @default(cuid())
+  nombre   String
+  contacto String?
+  products Product[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  nombre       String
+  barcode      String   @unique
+  precioVenta  Decimal  @db.Decimal(10, 2)
+  costo        Decimal  @db.Decimal(10, 2)
+  stock        Int      @default(0)
+  stockMinimo  Int      @default(5)
+  unidad       String   @default("unidad")
+  imagenUrl    String?  @db.Text
+  activo       Boolean  @default(true)
+  categoryId   String?
+  supplierId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category   Category?   @relation(fields: [categoryId], references: [id])
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id])
+  saleItems  SaleItem[]
+  movements  StockMove[]
+
+  @@index([nombre])
+  @@index([barcode])
+}
+
+model StockMove {
+  id        String         @id @default(cuid())
+  productId String
+  tipo      TipoMovimiento
+  cantidad  Int
+  motivo    String?
+  userId    String
+  createdAt DateTime       @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+}
+
+model Shift {
+  id             String    @id @default(cuid())
+  userId         String
+  montoApertura  Decimal   @db.Decimal(10, 2)
+  montoCierre    Decimal?  @db.Decimal(10, 2)
+  abiertoEn      DateTime  @default(now())
+  cerradoEn      DateTime?
+
+  user  User   @relation(fields: [userId], references: [id])
+  sales Sale[]
+}
+
+model Sale {
+  id                String     @id @default(cuid())
+  userId            String
+  shiftId           String
+  total             Decimal    @db.Decimal(10, 2)
+  metodoPago        MetodoPago
+  yapeCodigo        String?
+  yapeCapturaUrl    String?
+  anulada           Boolean    @default(false)
+  motivoAnulacion   String?
+  createdAt         DateTime   @default(now())
+
+  user  User       @relation(fields: [userId], references: [id])
+  shift Shift      @relation(fields: [shiftId], references: [id])
+  items SaleItem[]
+}
+
+model SaleItem {
+  id             String  @id @default(cuid())
+  saleId         String
+  productId      String
+  cantidad       Int
+  precioUnitario Decimal @db.Decimal(10, 2)
+  descuento      Decimal @default(0) @db.Decimal(10, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Attendance {
+  id      String    @id @default(cuid())
+  userId  String
+  entrada DateTime  @default(now())
+  salida  DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model ReportLog {
+  id          String   @id @default(cuid())
+  tipo        String
+  enviadoA    String
+  resumenJson String
+  enviadoEn   DateTime @default(now())
+}
+
+model Settings {
+  id                String @id @default(cuid())
+  nombreNegocio     String @default("Mi Negocio")
+  correoReportes    String?
+  umbralStockBajo   Int    @default(5)
+  moneda            String @default("PEN")
+}
