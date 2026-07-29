@@ -1,22 +1,33 @@
-# Esta variante usa tu base de datos Neon (en la nube) en vez de un Postgres
-# local, así que NO hay un servicio "db" aquí: la app y el worker se
-# conectan directo con el DATABASE_URL que pongas en tu archivo .env
-# (la cadena de conexión de Neon, con ?sslmode=require al final).
-#
-# Si en el futuro prefieres correr Postgres local en este mismo servidor
-# (sin depender de internet), avísame y agrego de nuevo el servicio "db".
-
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: newsis
+      POSTGRES_PASSWORD: newsis_local_pass
+      POSTGRES_DB: newsis
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsis -d newsis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # Contenedor de un solo uso: aplica las migraciones y el seed antes de que
-  # arranquen la app y el worker. Usa la imagen "worker" (con node_modules
-  # completo) porque la imagen "runner" es liviana y no trae el CLI de
-  # Prisma — si se intentara correr prisma ahí, npx bajaría la última
-  # versión de internet en cada arranque (incompatible con este schema).
+  # arranquen la app y el worker.
   migrate:
     build:
       context: .
       target: worker
+    depends_on:
+      db:
+        condition: service_healthy
     env_file: .env
+    environment:
+      DATABASE_URL: "postgresql://newsis:newsis_local_pass@db:5432/newsis"
     command: sh -c "npx prisma migrate deploy && npx prisma db seed || true"
 
   app:
@@ -28,11 +39,11 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file: .env
+    environment:
+      DATABASE_URL: "postgresql://newsis:newsis_local_pass@db:5432/newsis"
     ports:
       - "3010:3000"
 
-  # Tareas programadas: reporte diario por correo (22:00) y ping cada 4 min
-  # para evitar que Neon suspenda el cómputo durante el horario de atención.
   worker:
     build:
       context: .
@@ -42,4 +53,9 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file: .env
+    environment:
+      DATABASE_URL: "postgresql://newsis:newsis_local_pass@db:5432/newsis"
     command: ["npx", "tsx", "scripts/worker.ts"]
+
+volumes:
+  pgdata:
